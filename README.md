@@ -2,6 +2,11 @@
 
 記錄寵物（和重要的人）每一個日子的可愛 PWA：出生、到家紀念、日記、健康提醒與倒數。
 
+🔗 **線上版**：<https://hikari5014.github.io/Pet-calendars/>（GitHub Pages，推 main 自動更新）
+備援：<https://pet-days.vercel.app>（Vercel）
+
+手機打開網址 → 選「加入主畫面」，用起來就跟原生 App 一樣。
+
 - 📄 設計與開發計畫：[PLAN.md](./PLAN.md)
 - 🐱 支援貓狗以外的特寵：兔、鳥、鼠、爬蟲、水族⋯⋯還有「重要的人」
 - 🎨 可變字型圖示動畫、彈簧過場、七種主題色、深淺色模式
