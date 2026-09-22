@@ -35,30 +35,10 @@ const DEFAULTS = {
   pets: [], events: [],
 };
 
-/* ---------- 日期小工具 ---------- */
-const pad = n => String(n).padStart(2, '0');
-const toISO = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const fromISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
-const daysBetween = (a, b) => Math.round((b - a) / 86400000);
+/* ---------- 日期小工具（共用自 common.js，SW 也用同一份） ---------- */
+const { toISO, fromISO, startOfToday, daysBetween, nextOccurrence } = PetDate;
 const fmtDate = iso => { const d = fromISO(iso); return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
 const fmtShort = iso => { const d = fromISO(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
-
-/** 下一次發生的日期（yearly 逢年、monthly 逢月、once 就是那天） */
-function nextOccurrence(iso, repeat) {
-  const today = startOfToday(), base = fromISO(iso);
-  if (repeat === 'yearly') {
-    let n = new Date(today.getFullYear(), base.getMonth(), base.getDate());
-    if (n < today) n = new Date(today.getFullYear() + 1, base.getMonth(), base.getDate());
-    return n;
-  }
-  if (repeat === 'monthly') {
-    let n = new Date(today.getFullYear(), today.getMonth(), base.getDate());
-    if (n < today) n = new Date(today.getFullYear(), today.getMonth() + 1, base.getDate());
-    return n;
-  }
-  return base;
-}
 
 /** 幾歲幾個月／未滿一歲就顯示天數 */
 function ageText(iso) {
@@ -86,6 +66,7 @@ function load() {
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch { toast('儲存空間不足，資料沒存起來'); }
+  syncReminders();
 }
 
 function demoData() {
@@ -120,14 +101,61 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
-const stickerSVG = (id, size = '') =>
-  `<div class="sticker-slot"${size ? ` data-size="${size}"` : ''}><svg><use href="#${id}"></use></svg></div>`;
+const stickerSVG = (sp, size = '') =>
+  `<div class="sticker-slot"${size ? ` data-size="${size}"` : ''} style="--sh:${sp.hue}"><svg><use href="#${sp.sticker}"></use></svg></div>`;
+const thumbSVG = (photoId, size = '') =>
+  `<div class="sticker-slot thumb"${size ? ` data-size="${size}"` : ''}><img data-photo="${photoId}" alt=""></div>`;
 
 async function loadStickers() {
   try {
     const res = await fetch('./assets/stickers.svg');
     $('#sticker-sprite').innerHTML = await res.text();
   } catch { /* 離線第一次開可能失敗，之後 SW 會補上 */ }
+}
+
+/* ---------- 照片（原圖壓過再存進 IndexedDB） ---------- */
+const photoURLs = new Map();
+const MAX_PHOTOS = 9;
+
+async function photoURL(id) {
+  if (photoURLs.has(id)) return photoURLs.get(id);
+  const blob = await PetDB.getPhoto(id).catch(() => null);
+  if (!blob) return null;
+  const url = URL.createObjectURL(blob);
+  photoURLs.set(id, url);
+  return url;
+}
+
+async function hydratePhotos(root = document) {
+  for (const img of root.querySelectorAll('img[data-photo]:not([data-ready])')) {
+    const url = await photoURL(img.dataset.photo);
+    if (url) { img.src = url; img.dataset.ready = '1'; }
+    else img.closest('.sticker-slot, .photo-cell')?.remove();
+  }
+}
+
+/** 縮到長邊 1600px 的 JPEG，手機拍的照片才不會把空間吃光 */
+async function shrink(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.82));
+    return blob ?? file;
+  } catch { return file; }   // 瀏覽器不支援就存原圖
+}
+
+/** 清掉沒有任何紀錄在用的照片（取消新增時會留下孤兒） */
+async function gcPhotos() {
+  try {
+    const used = new Set(state.events.flatMap(e => e.photos ?? []));
+    const ids = await PetDB.photoIds();
+    await Promise.all(ids.filter(id => !used.has(id)).map(id => PetDB.delPhoto(id)));
+  } catch { /* 沒有 IndexedDB 就算了 */ }
 }
 
 /* ---------- 主題 ---------- */
@@ -166,8 +194,10 @@ function switchView(name) {
     scrollTo({ top: 0, behavior: 'instant' });
     render();
   };
-  if (document.startViewTransition && state.settings.animations) document.startViewTransition(run);
-  else run();
+  if (document.startViewTransition && state.settings.animations) {
+    // 過場會吞掉 callback 裡的錯誤，補一個 catch 才看得到
+    document.startViewTransition(run).updateCallbackDone.catch(err => console.error(err));
+  } else run();
 }
 function moveIndicator() {
   const btn = $(`.tabbar button[data-target="${currentView}"]`);
@@ -203,6 +233,7 @@ function renderHome() {
     $('#hero-unit').textContent = e.days === 0 ? '就是這一天 🎉' : '天後';
     $('#hero-date').textContent = `${fmtDate(toISO(e.next))}${e.repeat === 'yearly' ? ' · 每年' : e.repeat === 'monthly' ? ' · 每月' : ''}`;
     $('.hero-sticker use').setAttribute('href', `#${sp.sticker}`);
+    $('.hero-sticker').style.setProperty('--sh', sp.hue);
     const span = e.repeat === 'monthly' ? 30 : 365;
     $('#hero-ring').style.strokeDashoffset = 327 * Math.min(1, e.days / span);
   } else hero.hidden = true;
@@ -218,14 +249,16 @@ function renderHome() {
 
 function itemHTML(e, isDiary = false) {
   const pet = petOf(e.petId), sp = speciesOf(pet?.species), t = typeOf(e.type);
+  const photos = e.photos ?? [];
+  const avatar = photos.length ? thumbSVG(photos[0], 'sm') : stickerSVG(sp, 'sm');
   const right = isDiary
     ? `<div class="item-right"><b>${fmtShort(e.date)}</b><small>${fromISO(e.date).getFullYear()}</small></div>`
     : `<div class="item-right"><b>${e.days === 0 ? '今天' : e.days}</b><small>${e.days === 0 ? '' : '天後'}</small></div>`;
   return `<button class="item" data-event="${e.id}">
-    ${stickerSVG(sp.sticker, 'sm')}
+    ${avatar}
     <div class="item-main">
       <div class="item-title">${esc(e.title)} ${e.days === 0 && !isDiary ? '<span class="chip today">今天</span>' : `<span class="chip">${t.label}</span>`}</div>
-      <div class="item-sub">${esc(pet?.name ?? '未指定')}${e.note ? ' · ' + esc(e.note) : ''}</div>
+      <div class="item-sub">${esc(pet?.name ?? '未指定')}${photos.length > 1 ? ` · 📷 ${photos.length}` : ''}${e.note ? ' · ' + esc(e.note) : ''}</div>
     </div>${right}</button>`;
 }
 const emptyHTML = (icon, text) => `<div class="empty"><span class="msr">${icon}</span>${text}</div>`;
@@ -283,7 +316,7 @@ function renderPets() {
     const home = p.gotcha ? daysBetween(fromISO(p.gotcha), startOfToday()) : null;
     const count = state.events.filter(e => e.petId === p.id).length;
     return `<button class="item pet-card" data-pet="${p.id}">
-      ${stickerSVG(sp.sticker)}
+      ${stickerSVG(sp)}
       <div class="item-main">
         <div class="item-title">${esc(p.name)} <span class="chip">${sp.label}</span></div>
         <div class="pet-stats">
@@ -304,6 +337,7 @@ function renderSettings() {
     `<button class="swatch" data-hue="${h}" aria-pressed="${h === s.hue}" aria-label="主題色 ${h}"
       style="background:linear-gradient(145deg,hsl(${h} 100% 78%),hsl(${h} 72% 58%))"></button>`).join('');
   $$('#seg-theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === s.theme)));
+  $('#notify-status').textContent = `目前狀態：${REMINDER_STATUS[reminderMode]}`;
   $$('[data-setting]').forEach(el => {
     const key = el.dataset.setting;
     if (el.type === 'checkbox') el.checked = !!s[key]; else el.value = s[key];
@@ -315,6 +349,7 @@ function render() {
   if (currentView === 'calendar') renderCalendar();
   if (currentView === 'pets') renderPets();
   if (currentView === 'settings') renderSettings();
+  hydratePhotos();
 }
 
 /* ---------- 底部面板 ---------- */
@@ -336,9 +371,27 @@ function closeSheet() {
   }, state.settings.animations ? 220 : 0);
 }
 
+let draftPhotos = [];
+
+function photoGridHTML() {
+  return draftPhotos.map(id => `<div class="photo-cell">
+      <img data-photo="${id}" alt="" data-view-photo="${id}">
+      <button type="button" class="photo-x" data-rmphoto="${id}" aria-label="移除照片"><span class="msr">close</span></button>
+    </div>`).join('') +
+    (draftPhotos.length < MAX_PHOTOS
+      ? `<button type="button" class="photo-add" id="btn-add-photo"><span class="msr">add_a_photo</span>加照片</button>` : '');
+}
+function renderPhotoGrid() {
+  const grid = $('#photo-grid');
+  if (!grid) return;
+  grid.innerHTML = photoGridHTML();
+  hydratePhotos(grid);
+}
+
 function eventForm(ev) {
   const isNew = !ev;
   const e = ev ?? { id: '', petId: state.pets[0]?.id ?? '', type: 'custom', title: '', date: toISO(startOfToday()), repeat: 'yearly', note: '' };
+  draftPhotos = [...(e.photos ?? [])];
   return `<h2>${isNew ? '新增一筆紀錄' : '編輯紀錄'}</h2>
   <p class="hint">生日、到家紀念、健康提醒、還是今天的小日記？</p>
   <div class="field"><label>類型</label>
@@ -357,6 +410,10 @@ function eventForm(ev) {
       <option value="once" ${e.repeat === 'once' ? 'selected' : ''}>只有這一次</option>
     </select></div>
   <div class="field"><label>備註 / 日記</label><textarea id="f-note" placeholder="今天發生了什麼？">${esc(e.note)}</textarea></div>
+  <div class="field"><label>照片</label>
+    <div class="photo-grid" id="photo-grid">${photoGridHTML()}</div>
+    <input type="file" id="photo-input" accept="image/*" multiple hidden>
+  </div>
   <div class="sheet-actions">
     ${isNew ? '' : `<button class="btn danger" id="f-delete" data-id="${e.id}">刪除</button>`}
     <button class="btn subtle" data-close>取消</button>
@@ -372,7 +429,7 @@ function petForm(p) {
   <div class="field"><label>種類</label>
     <div class="pick-grid" id="pick-species">
       ${SPECIES.map(s => `<button type="button" class="pick" data-species="${s.id}" aria-pressed="${s.id === pet.species}">
-        <svg><use href="#${s.sticker}"></use></svg>${s.label}</button>`).join('')}
+        <svg style="color:hsl(${s.hue} 72% 56%)"><use href="#${s.sticker}"></use></svg>${s.label}</button>`).join('')}
     </div></div>
   <div class="field"><label>名字</label><input id="p-name" value="${esc(pet.name)}" placeholder="例如：奶茶"></div>
   <div class="field"><label>生日</label><input id="p-birth" type="date" value="${pet.birthday ?? ''}"></div>
@@ -441,11 +498,27 @@ function bind() {
       $$('#pick-species .pick').forEach(b => b.setAttribute('aria-pressed', String(b === spPick)));
       haptic(); return;
     }
+    if (e.target.closest('#btn-add-photo')) { $('#photo-input').click(); return; }
+    const rm = e.target.closest('[data-rmphoto]');
+    if (rm) { draftPhotos = draftPhotos.filter(id => id !== rm.dataset.rmphoto); renderPhotoGrid(); haptic(); return; }
+    const view = e.target.closest('[data-view-photo]');
+    if (view) { openLightbox(view.dataset.viewPhoto); return; }
     if (e.target.closest('#f-save')) return saveEvent(e.target.closest('#f-save').dataset.id);
     if (e.target.closest('#f-delete')) return deleteEvent(e.target.closest('#f-delete').dataset.id);
     if (e.target.closest('#p-save')) return savePet(e.target.closest('#p-save').dataset.id);
     if (e.target.closest('#p-delete')) return deletePet(e.target.closest('#p-delete').dataset.id);
   });
+
+  $('#sheet').addEventListener('change', e => {
+    if (e.target.id === 'photo-input') { addPhotos(e.target.files); e.target.value = ''; }
+  });
+
+  $('#lightbox').addEventListener('click', () => {
+    $('#lightbox').hidden = true;
+    $('#lightbox img').removeAttribute('src');
+  });
+
+  addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 
   /* 設定 */
   $('#swatches').addEventListener('click', e => {
@@ -461,8 +534,14 @@ function bind() {
     let value = el.type === 'checkbox' ? el.checked : el.value;
     if (key === 'notify' && value) value = await askNotify();
     state.settings[key] = value;
-    el.type === 'checkbox' ? (el.checked = !!value) : null;
-    save(); applyTheme(); render(); haptic();
+    if (el.type === 'checkbox') el.checked = !!value;
+    save(); applyTheme();
+    if (key === 'notify' || key === 'remindDays') {
+      await setupReminders();
+      if (value && key === 'notify') toast(REMINDER_STATUS[reminderMode]);
+      checkReminders();
+    }
+    render(); haptic();
   }));
 
   $('#btn-export').addEventListener('click', exportData);
@@ -491,6 +570,7 @@ function saveEvent(id) {
     petId: $('#f-pet').value,
     type: $('#pick-type [aria-pressed="true"]')?.dataset.type ?? 'custom',
     title, date, repeat: $('#f-repeat').value, note: $('#f-note').value.trim(),
+    photos: [...draftPhotos],
   };
   const existing = state.events.find(e => e.id === id);
   if (existing) Object.assign(existing, data);
@@ -501,6 +581,7 @@ function saveEvent(id) {
 function deleteEvent(id) {
   if (!confirm('刪除這筆紀錄？')) return;
   state.events = state.events.filter(e => e.id !== id);
+  gcPhotos();
   save(); closeSheet(); render(); toast('已刪除');
 }
 function savePet(id) {
@@ -527,12 +608,52 @@ function deletePet(id) {
   if (!confirm('刪除這位成員？他的紀錄也會一起消失。')) return;
   state.pets = state.pets.filter(p => p.id !== id);
   state.events = state.events.filter(e => e.petId !== id);
+  gcPhotos();
   save(); closeSheet(); render(); toast('已刪除');
 }
 
+/* ---------- 照片：新增與放大 ---------- */
+async function addPhotos(files) {
+  const list = [...(files ?? [])].filter(f => f.type.startsWith('image/'));
+  if (!list.length) return;
+  const room = MAX_PHOTOS - draftPhotos.length;
+  if (list.length > room) toast(`一筆最多 ${MAX_PHOTOS} 張，只收了 ${room} 張`);
+  for (const file of list.slice(0, room)) {
+    try {
+      const blob = await shrink(file);
+      const id = uid() + uid();
+      await PetDB.putPhoto(id, blob);
+      draftPhotos.push(id);
+    } catch { toast('這張照片存不進去'); }
+  }
+  renderPhotoGrid();
+  haptic(12);
+}
+
+async function openLightbox(id) {
+  const url = await photoURL(id);
+  if (!url) return;
+  $('#lightbox img').src = url;
+  $('#lightbox').hidden = false;
+  haptic();
+}
+
 /* ---------- 備份 / 還原 ---------- */
-function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+const blobToDataURL = blob => new Promise(res => {
+  const fr = new FileReader();
+  fr.onload = () => res(fr.result);
+  fr.readAsDataURL(blob);
+});
+
+async function exportData() {
+  toast('打包中⋯');
+  const ids = [...new Set(state.events.flatMap(e => e.photos ?? []))];
+  const photos = {};
+  for (const id of ids) {
+    const p = await PetDB.getPhoto(id).catch(() => null);
+    if (p) photos[id] = await blobToDataURL(p);
+  }
+  const blob = new Blob([JSON.stringify({ ...state, photos }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `petdays-${toISO(startOfToday())}.json`;
@@ -545,29 +666,93 @@ async function importData(e) {
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data.pets) || !Array.isArray(data.events)) throw new Error('格式不符');
-    state = { ...DEFAULTS, ...data, settings: { ...DEFAULTS.settings, ...data.settings } };
+    for (const [id, dataURL] of Object.entries(data.photos ?? {})) {
+      const blob = await (await fetch(dataURL)).blob();
+      await PetDB.putPhoto(id, blob);
+    }
+    const { photos, ...rest } = data;
+    state = { ...DEFAULTS, ...rest, settings: { ...DEFAULTS.settings, ...data.settings } };
+    photoURLs.clear();
     save(); applyTheme(); render(); toast('匯入完成 ✓');
   } catch { toast('這個檔案讀不懂'); }
   e.target.value = '';
 }
 
-/* ---------- 提醒（demo：開 App 時檢查一次） ---------- */
+/* ---------- 提醒 ---------- */
+let reminderMode = 'off';   // off | foreground | background
+
+/** 把提醒需要的最小資料丟進 IndexedDB，Service Worker 在背景才讀得到 */
+function syncReminders() {
+  const s = state.settings;
+  return PetDB.putMeta('reminders', {
+    notify: !!s.notify,
+    remindDays: Number(s.remindDays),
+    events: state.events.filter(e => e.type !== 'diary').map(e => ({
+      id: e.id, title: e.title, date: e.date, repeat: e.repeat,
+      pet: petOf(e.petId)?.name ?? '',
+    })),
+  }).catch(() => {});
+}
+
 async function askNotify() {
   if (!('Notification' in window)) { toast('這個瀏覽器不支援通知'); return false; }
   const p = await Notification.requestPermission();
   if (p !== 'granted') { toast('沒有拿到通知權限'); return false; }
-  toast('之後會在重要日子前提醒你'); return true;
+  return true;
 }
-function checkReminders() {
-  const s = state.settings;
-  if (!s.notify || Notification?.permission !== 'granted') return;
-  const due = upcomingList().filter(e => e.days <= Number(s.remindDays));
+
+/** 有背景排程就用它，沒有就退回「開 App 時檢查」 */
+async function setupReminders() {
+  if (!state.settings.notify || Notification?.permission !== 'granted') {
+    reminderMode = 'off';
+    return reminderMode;
+  }
+  reminderMode = 'foreground';
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg?.periodicSync) {
+      const st = await navigator.permissions?.query({ name: 'periodic-background-sync' });
+      if (st?.state === 'granted') {
+        await reg.periodicSync.register('petdays-reminders', { minInterval: 12 * 60 * 60 * 1000 });
+        reminderMode = 'background';
+      }
+    }
+  } catch { /* 不支援就維持 foreground */ }
+  return reminderMode;
+}
+
+const REMINDER_STATUS = {
+  off: '關閉中',
+  foreground: '這台裝置不支援背景排程，會在你打開 App 時提醒',
+  background: '已排入背景排程，App 沒開也會提醒',
+};
+
+async function checkReminders() {
+  if (!state.settings.notify || Notification?.permission !== 'granted') return;
+  const due = PetDate.dueReminders(await PetDB.getMeta('reminders').catch(() => null));
   if (!due.length) return;
-  const e = due[0];
-  new Notification('毛日子提醒', {
-    body: e.days === 0 ? `今天是「${e.title}」！` : `還有 ${e.days} 天就是「${e.title}」`,
-    icon: './assets/icon.svg', tag: 'petdays',
-  });
+  const seen = (await PetDB.getMeta('notified').catch(() => null)) ?? {};
+  let changed = false;
+  // 手機（尤其 Android）只允許 Service Worker 發通知，有 SW 就走 SW
+  const reg = await navigator.serviceWorker?.ready.catch(() => null);
+  for (const e of due.slice(0, 3)) {
+    const key = `${e.id}:${e.nextISO}`;
+    if (seen[key]) continue;
+    const opts = {
+      body: e.days === 0 ? `今天是「${e.title}」！` : `還有 ${e.days} 天就是「${e.title}」`,
+      icon: './assets/icon.svg', tag: key, data: { url: './index.html' },
+    };
+    try {
+      if (reg?.showNotification) await reg.showNotification('毛日子提醒', opts);
+      else new Notification('毛日子提醒', opts);
+    } catch { continue; }
+    seen[key] = Date.now();
+    changed = true;
+  }
+  if (changed) {
+    const trimmed = Object.fromEntries(Object.entries(seen).sort((a, b) => b[1] - a[1]).slice(0, 60));
+    PetDB.putMeta('notified', trimmed).catch(() => {});
+  }
 }
 
 /* ---------- 圖示字型 ---------- */
@@ -589,9 +774,12 @@ async function init() {
   $$('.tabbar button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.target === currentView)));
   render();
   requestAnimationFrame(moveIndicator);
-  setTimeout(checkReminders, 1500);
+  gcPhotos();
+  syncReminders();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
+  await setupReminders();
+  setTimeout(checkReminders, 1500);
 }
 init();

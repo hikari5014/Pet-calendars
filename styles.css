@@ -43,6 +43,7 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }   /* 別讓 display:grid/flex 蓋掉 hidden */
 
 body {
   margin: 0;
@@ -126,10 +127,18 @@ body {
 /* ---- 貼圖插槽（之後換成正式貼圖） ---- */
 .sticker-slot {
   display: grid; place-items: center; flex: none;
-  border-radius: 24px; color: var(--brand-deep);
-  background: linear-gradient(150deg, var(--brand-soft), color-mix(in srgb, var(--brand) 25%, transparent));
+  border-radius: 24px; overflow: hidden;
+  /* --sh = 該成員的色相，沒給就跟著主題色 */
+  color: hsl(var(--sh, var(--brand-h)) 70% 55%);
+  background: linear-gradient(150deg, hsl(var(--sh, var(--brand-h)) 100% 94%), hsl(var(--sh, var(--brand-h)) 95% 86%));
   width: 56px; height: 56px;
 }
+:root[data-dark="true"] .sticker-slot {
+  color: hsl(var(--sh, var(--brand-h)) 80% 72%);
+  background: linear-gradient(150deg, hsl(var(--sh, var(--brand-h)) 30% 26%), hsl(var(--sh, var(--brand-h)) 32% 20%));
+}
+.sticker-slot.thumb { background: var(--surface-2); }
+.sticker-slot.thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sticker-slot svg { width: 70%; height: 70%; }
 .sticker-slot[data-size="xl"] { width: 84px; height: 84px; border-radius: 30px; }
 .sticker-slot[data-size="sm"] { width: 42px; height: 42px; border-radius: 16px; }
@@ -331,6 +340,42 @@ body {
 .pick svg { width: 30px; height: 30px; color: var(--brand-deep); }
 .pick:active { transform: scale(.9); }
 .pick[aria-pressed="true"] { border-color: var(--brand-deep); color: var(--text); background: var(--brand-soft); }
+/* ---- 照片 ---- */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.photo-cell {
+  position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: var(--surface-2);
+  animation: pop-in 320ms var(--ease-spring) both;
+}
+.photo-cell img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; display: block; }
+.photo-x {
+  position: absolute; top: 5px; right: 5px; width: 26px; height: 26px; border: 0; border-radius: 50%;
+  background: #2a1c1ccc; color: #fff; display: grid; place-items: center; cursor: pointer;
+  transition: transform 160ms var(--ease-spring);
+}
+.photo-x:active { transform: scale(.85); }
+.photo-x .msr { font-size: 16px; }
+.photo-add {
+  aspect-ratio: 1; border: 2px dashed var(--line); border-radius: 18px; background: none; cursor: pointer;
+  display: grid; place-items: center; gap: 4px; align-content: center;
+  color: var(--text-2); font: inherit; font-size: 11px;
+  transition: border-color var(--dur), color var(--dur), transform 160ms var(--ease-spring);
+}
+.photo-add:active { transform: scale(.92); }
+.photo-add:hover { border-color: var(--brand); color: var(--brand-deep); }
+.photo-add .msr { font-size: 24px; }
+
+.lightbox {
+  position: fixed; inset: 0; z-index: 70; background: #140f0fe6; backdrop-filter: blur(6px);
+  display: grid; place-items: center; cursor: zoom-out; animation: fade-in var(--dur) both; padding: 20px;
+}
+.lightbox img {
+  max-width: 94vw; max-height: 88dvh; border-radius: 20px; box-shadow: 0 20px 60px -20px #000;
+  animation: zoom-in 340ms var(--ease-spring) both;
+}
+@keyframes zoom-in { from { transform: scale(.88); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.hint-line { margin: -4px 14px 10px 50px; font-size: 11.5px; color: var(--text-2); }
+
 .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
 .btn {
   flex: 1; border: 0; border-radius: 18px; padding: 15px; font: inherit; font-weight: 600; font-size: 15px;

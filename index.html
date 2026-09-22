@@ -117,6 +117,7 @@
         <div class="row-text"><b>開啟提醒</b><small>重要日子前先通知你</small></div>
         <input type="checkbox" class="switch" data-setting="notify">
       </label>
+      <p class="hint-line" id="notify-status"></p>
       <label class="row">
         <span class="msr">alarm</span>
         <div class="row-text"><b>提前幾天</b><small>預設在紀念日前提醒</small></div>
@@ -191,6 +192,9 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<div class="lightbox" id="lightbox" hidden><img alt="照片"></div>
+
+<script src="./common.js"></script>
 <script src="./app.js" type="module"></script>
 </body>
 </html>

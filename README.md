@@ -5,6 +5,8 @@
 - 📄 設計與開發計畫：[PLAN.md](./PLAN.md)
 - 🐱 支援貓狗以外的特寵：兔、鳥、鼠、爬蟲、水族⋯⋯還有「重要的人」
 - 🎨 可變字型圖示動畫、彈簧過場、七種主題色、深淺色模式
+- 📷 相片日記：一筆最多 9 張，自動壓縮後存在裝置上
+- 🔔 倒數提醒：支援的裝置走背景排程，不支援就退回開 App 時提醒
 - 📱 可加到手機主畫面、離線可用
 
 ## 試跑
@@ -25,6 +27,7 @@ python3 -m http.server 8080
 |---|---|
 | `index.html` | 版面骨架 |
 | `styles.css` | 主題變數與全部動畫 |
-| `app.js` | 狀態、日期計算、渲染 |
+| `app.js` | 狀態、渲染、照片處理 |
+| `common.js` | App 與 Service Worker 共用的 IndexedDB／日期工具 |
 | `sw.js` / `manifest.webmanifest` | PWA |
-| `assets/stickers.svg` | 貼圖佔位，之後整包替換 |
+| `assets/stickers.svg` | 九張成員貼圖，換風格只改這一個檔 |
