@@ -1,0 +1,48 @@
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/pet-record-pwa-app-c80uzs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只跑一個部署，但不中斷進行中的那個
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 整理要發佈的檔案
+        run: |
+          mkdir -p _site/assets
+          cp index.html styles.css app.js common.js sw.js manifest.webmanifest _site/
+          cp assets/*.svg _site/assets/
+          cp _site/index.html _site/404.html   # 單頁 App，找不到路徑就回首頁
+          touch _site/.nojekyll
+          ls -R _site
+
+      - name: 開啟並設定 Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
