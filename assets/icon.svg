@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="毛日子">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd6c4"/><stop offset="1" stop-color="#ffb4a2"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="96" y="128" width="320" height="288" rx="56" fill="#fffaf6"/>
+  <rect x="96" y="128" width="320" height="72" rx="36" fill="#ff8f7a"/>
+  <circle cx="176" cy="112" r="20" fill="#ff8f7a"/><circle cx="336" cy="112" r="20" fill="#ff8f7a"/>
+  <g fill="#ff8f7a">
+    <ellipse cx="200" cy="286" rx="26" ry="32"/><ellipse cx="256" cy="268" rx="26" ry="32"/>
+    <ellipse cx="312" cy="286" rx="26" ry="32"/>
+    <path d="M256 320c42 0 66 26 66 50s-30 28-66 28-66-4-66-28 24-50 66-50z"/>
+  </g>
+</svg>

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>毛日子 · Pet Days</title>
+<meta name="description" content="記錄寵物（和重要的人）的每一個日子：出生、到家、日記與倒數提醒。">
+<meta name="theme-color" content="#ffb4a2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,200..700,0..1,-25..200&family=Fredoka:wght@400..600&family=Noto+Sans+TC:wght@400..700&display=swap">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<!-- 貼圖佔位層：正式貼圖進來時，只要換掉 assets/stickers.svg -->
+<div id="sticker-sprite" aria-hidden="true"></div>
+
+<header class="appbar" id="appbar">
+  <div class="appbar-left">
+    <span class="logo-dot"></span>
+    <div>
+      <h1 id="appbar-title">毛日子</h1>
+      <p id="appbar-sub" class="appbar-sub">今天也要好好記錄 ✦</p>
+    </div>
+  </div>
+  <button class="icon-btn" id="btn-today" type="button" aria-label="回到今天">
+    <span class="msr">today</span>
+  </button>
+</header>
+
+<main id="stage">
+
+  <!-- 首頁 -->
+  <section class="view" data-view="home" aria-label="首頁">
+    <div class="countdown-hero card" id="hero" hidden>
+      <div class="hero-sticker sticker-slot" data-size="xl"><svg><use href="#st-paw"></use></svg></div>
+      <div class="hero-body">
+        <p class="hero-label" id="hero-label">下一個重要日子</p>
+        <h2 class="hero-title" id="hero-title">—</h2>
+        <div class="hero-count"><b id="hero-days">0</b><span id="hero-unit">天後</span></div>
+        <p class="hero-date" id="hero-date"></p>
+      </div>
+      <div class="hero-ring"><svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-fg" id="hero-ring" cx="60" cy="60" r="52"/></svg></div>
+    </div>
+
+    <h3 class="section-title"><span class="msr">event_upcoming</span>即將到來</h3>
+    <div id="upcoming" class="stack"></div>
+
+    <h3 class="section-title"><span class="msr">auto_stories</span>最近日記</h3>
+    <div id="recent-diary" class="stack"></div>
+    <div class="bottom-space"></div>
+  </section>
+
+  <!-- 日曆 -->
+  <section class="view" data-view="calendar" aria-label="日曆" hidden>
+    <div class="cal-head card">
+      <button class="icon-btn" id="cal-prev" type="button" aria-label="上個月"><span class="msr">chevron_left</span></button>
+      <button class="cal-month" id="cal-month" type="button"></button>
+      <button class="icon-btn" id="cal-next" type="button" aria-label="下個月"><span class="msr">chevron_right</span></button>
+    </div>
+    <div class="cal-grid card">
+      <div class="cal-weekdays" id="cal-weekdays"></div>
+      <div class="cal-days" id="cal-days"></div>
+    </div>
+    <h3 class="section-title"><span class="msr">calendar_month</span><span id="cal-selected-label">當天紀錄</span></h3>
+    <div id="cal-list" class="stack"></div>
+    <div class="bottom-space"></div>
+  </section>
+
+  <!-- 寵物 -->
+  <section class="view" data-view="pets" aria-label="家庭成員" hidden>
+    <div id="pet-list" class="stack"></div>
+    <button class="ghost-btn" id="btn-add-pet" type="button"><span class="msr">add_circle</span>新增一位家庭成員</button>
+    <div class="bottom-space"></div>
+  </section>
+
+  <!-- 設定 -->
+  <section class="view" data-view="settings" aria-label="設定" hidden>
+    <div class="card settings-group">
+      <h3 class="group-title">外觀</h3>
+      <div class="row">
+        <span class="msr">palette</span>
+        <div class="row-text"><b>主題色</b><small>整個 App 的可愛程度來源</small></div>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="row">
+        <span class="msr">dark_mode</span>
+        <div class="row-text"><b>深色模式</b><small>跟隨系統 / 永遠亮 / 永遠暗</small></div>
+      </div>
+      <div class="segmented" id="seg-theme" role="group">
+        <button type="button" data-value="auto">自動</button>
+        <button type="button" data-value="light">亮</button>
+        <button type="button" data-value="dark">暗</button>
+      </div>
+      <label class="row switch-row">
+        <span class="msr">animation</span>
+        <div class="row-text"><b>動畫效果</b><small>關掉會省電、也比較安靜</small></div>
+        <input type="checkbox" class="switch" data-setting="animations">
+      </label>
+      <label class="row switch-row">
+        <span class="msr">vibration</span>
+        <div class="row-text"><b>觸感回饋</b><small>點按時輕輕震一下</small></div>
+        <input type="checkbox" class="switch" data-setting="haptics">
+      </label>
+    </div>
+
+    <div class="card settings-group">
+      <h3 class="group-title">提醒</h3>
+      <label class="row switch-row">
+        <span class="msr">notifications_active</span>
+        <div class="row-text"><b>開啟提醒</b><small>重要日子前先通知你</small></div>
+        <input type="checkbox" class="switch" data-setting="notify">
+      </label>
+      <label class="row">
+        <span class="msr">alarm</span>
+        <div class="row-text"><b>提前幾天</b><small>預設在紀念日前提醒</small></div>
+        <select data-setting="remindDays">
+          <option value="0">當天</option><option value="1">1 天</option>
+          <option value="3">3 天</option><option value="7">7 天</option>
+          <option value="14">14 天</option>
+        </select>
+      </label>
+      <label class="row">
+        <span class="msr">schedule</span>
+        <div class="row-text"><b>提醒時間</b><small>每天的這個時間檢查</small></div>
+        <input type="time" data-setting="remindTime">
+      </label>
+    </div>
+
+    <div class="card settings-group">
+      <h3 class="group-title">日曆</h3>
+      <label class="row">
+        <span class="msr">calendar_view_week</span>
+        <div class="row-text"><b>一週開始</b><small>星期日或星期一</small></div>
+        <select data-setting="weekStart">
+          <option value="0">星期日</option><option value="1">星期一</option>
+        </select>
+      </label>
+      <label class="row switch-row">
+        <span class="msr">cake</span>
+        <div class="row-text"><b>顯示年齡</b><small>卡片上顯示幾歲幾個月</small></div>
+        <input type="checkbox" class="switch" data-setting="showAge">
+      </label>
+    </div>
+
+    <div class="card settings-group">
+      <h3 class="group-title">資料</h3>
+      <button class="row row-btn" type="button" id="btn-export">
+        <span class="msr">download</span><div class="row-text"><b>匯出備份</b><small>存成 JSON 檔</small></div><span class="msr chev">chevron_right</span>
+      </button>
+      <button class="row row-btn" type="button" id="btn-import">
+        <span class="msr">upload</span><div class="row-text"><b>匯入備份</b><small>從 JSON 檔還原</small></div><span class="msr chev">chevron_right</span>
+      </button>
+      <button class="row row-btn" type="button" id="btn-demo">
+        <span class="msr">auto_fix_high</span><div class="row-text"><b>重新載入範例資料</b><small>回到 demo 的初始狀態</small></div><span class="msr chev">chevron_right</span>
+      </button>
+      <button class="row row-btn danger" type="button" id="btn-reset">
+        <span class="msr">delete_forever</span><div class="row-text"><b>清除所有資料</b><small>這個動作無法復原</small></div><span class="msr chev">chevron_right</span>
+      </button>
+      <input type="file" id="file-import" accept="application/json" hidden>
+    </div>
+
+    <p class="version">毛日子 Pet Days · Demo v0.1</p>
+    <div class="bottom-space"></div>
+  </section>
+</main>
+
+<button class="fab" id="fab" type="button" aria-label="新增紀錄">
+  <span class="msr">add</span>
+</button>
+
+<nav class="tabbar" id="tabbar" role="tablist">
+  <button role="tab" data-target="home"><span class="msr">home</span><small>首頁</small></button>
+  <button role="tab" data-target="calendar"><span class="msr">calendar_month</span><small>日曆</small></button>
+  <button role="tab" data-target="pets"><span class="msr">pets</span><small>成員</small></button>
+  <button role="tab" data-target="settings"><span class="msr">settings</span><small>設定</small></button>
+  <span class="tab-indicator" id="tab-indicator"></span>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden>
+  <div class="sheet-handle"></div>
+  <div class="sheet-body" id="sheet-body"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="./app.js" type="module"></script>
+</body>
+</html>

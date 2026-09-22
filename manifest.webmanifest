@@ -1,0 +1,17 @@
+{
+  "name": "毛日子 Pet Days",
+  "short_name": "毛日子",
+  "description": "記錄寵物（和重要的人）的每一個日子：出生、到家、日記與倒數提醒。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7f2",
+  "theme_color": "#ffb4a2",
+  "lang": "zh-Hant",
+  "categories": ["lifestyle", "utilities"],
+  "icons": [
+    { "src": "./assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./assets/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
